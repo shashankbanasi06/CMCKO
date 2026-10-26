@@ -1,0 +1,20 @@
+groups:
+  - name: cmcko_alerts
+    rules:
+      - alert: RemoteClusterTargetDown
+        expr: up{job=~"remote-cluster-.*"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Remote Cluster target {{ $labels.cluster }} is DOWN"
+          description: "Prometheus on System-3 cannot scrape {{ $labels.instance }} ({{ $labels.cluster }}). Verify network reachability or Beyla exporter status."
+
+      - alert: HighNetworkThroughputDetected
+        expr: sum by (cluster) (rate(beyla_network_flow_bytes_total[1m])) > 10485760 # > 10MB/s
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Spoke Cluster {{ $labels.cluster }} is experiencing high network throughput"
+          description: "Cluster {{ $labels.cluster }} network flow exceeded 10 MB/s under load generator."

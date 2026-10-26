@@ -1,0 +1,7 @@
+# Local secrets / machine-specific settings
+.env
+
+# Local runtime data
+data/*.db
+__pycache__/
+*.pyc

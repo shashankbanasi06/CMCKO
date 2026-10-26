@@ -1,0 +1,56 @@
+groups:
+  - name: cmcko_l4_l7_rules
+    interval: 5s
+    rules:
+      # =====================================================================
+      # LAYER 4 (Network / Transport) Recording Rules
+      # =====================================================================
+      # 1. Throughput — bytes transferred (sent vs. received)
+      - record: cmcko:l4:throughput_bytes:rate1m
+        expr: sum by (cluster, direction, cluster_namespace) (rate(beyla_network_flow_bytes_total[1m]))
+
+      # 2. Connection Count — active / concurrent connection flows
+      - record: cmcko:l4:connection_count
+        expr: count by (cluster, cluster_namespace) (rate(beyla_network_flow_bytes_total[1m]) > 0)
+
+      # 3. Packet Count & Retransmissions (Packet Loss)
+      - record: cmcko:l4:packet_rate:rate1m
+        expr: sum by (cluster, cluster_namespace) (rate(beyla_network_flow_packets_total[1m]))
+
+      - record: cmcko:l4:retransmissions:rate1m
+        expr: sum by (cluster, cluster_namespace) (rate(node_netstat_Tcp_RetransSegs[1m])) or vector(0)
+
+      # 4. RTT (Round-Trip Time) — network-level latency
+      - record: cmcko:l4:rtt_seconds
+        expr: (sum by (cluster, cluster_namespace) (rate(beyla_network_flow_rtt_seconds_sum[1m])) / sum by (cluster, cluster_namespace) (rate(beyla_network_flow_rtt_seconds_count[1m]))) or vector(0)
+
+      # =====================================================================
+      # LAYER 7 (Application) Recording Rules
+      # =====================================================================
+      # 1. Request Rate — requests per second (RPS)
+      - record: cmcko:l7:request_rate:rate1m
+        expr: sum by (cluster, cluster_namespace, service_name) (rate(http_server_request_duration_seconds_count[1m]))
+
+      # 2. Latency — request duration percentiles (p50, p95, p99)
+      - record: cmcko:l7:latency_p50_seconds
+        expr: histogram_quantile(0.50, sum by (le, cluster, cluster_namespace) (rate(http_server_request_duration_seconds_bucket[1m])))
+
+      - record: cmcko:l7:latency_p95_seconds
+        expr: histogram_quantile(0.95, sum by (le, cluster, cluster_namespace) (rate(http_server_request_duration_seconds_bucket[1m])))
+
+      - record: cmcko:l7:latency_p99_seconds
+        expr: histogram_quantile(0.99, sum by (le, cluster, cluster_namespace) (rate(http_server_request_duration_seconds_bucket[1m])))
+
+      # 3. Error Rate — 4xx / 5xx response codes & failure percentage
+      - record: cmcko:l7:error_rate:rate1m
+        expr: sum by (cluster, cluster_namespace, http_status_code) (rate(http_server_request_duration_seconds_count{http_status_code=~"[45].."}[1m]))
+
+      - record: cmcko:l7:error_percentage
+        expr: (sum by (cluster, cluster_namespace) (rate(http_server_request_duration_seconds_count{http_status_code=~"[45].."}[1m])) / sum by (cluster, cluster_namespace) (rate(http_server_request_duration_seconds_count[1m]))) * 100
+
+      # 4. Request / Response Size — payload bytes
+      - record: cmcko:l7:request_size_bytes
+        expr: (sum by (cluster, cluster_namespace) (rate(http_server_request_body_size_bytes_sum[1m])) / sum by (cluster, cluster_namespace) (rate(http_server_request_body_size_bytes_count[1m]))) or vector(0)
+
+      - record: cmcko:l7:response_size_bytes
+        expr: (sum by (cluster, cluster_namespace) (rate(http_server_response_body_size_bytes_sum[1m])) / sum by (cluster, cluster_namespace) (rate(http_server_response_body_size_bytes_count[1m]))) or vector(0)
